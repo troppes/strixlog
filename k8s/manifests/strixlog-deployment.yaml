@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strixlog
+  namespace: default
+  labels:
+    app: strixlog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: strixlog
+  template:
+    metadata:
+      labels:
+        app: strixlog
+    spec:
+      serviceAccountName: strixlog
+      containers:
+        - name: strixlog
+          image: strixlog:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: STRIXLOG_ENV
+              value: kubernetes
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10

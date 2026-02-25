@@ -37,12 +37,35 @@ cd strixlog && go test ./...
 cd randomlog && go test ./...
 ```
 
+## Kubernetes (KIND)
+
+Run both apps in a local Kubernetes cluster using [KIND](https://kind.sigs.k8s.io/).
+
+**Prerequisites:** `kind`, `kubectl`, `docker`
+
+```bash
+# Start cluster, build images, deploy
+./k8s/setup.sh
+
+# View logs
+kubectl logs -f deploy/randomlog
+kubectl logs -f deploy/strixlog
+
+# Access strixlog health endpoint
+kubectl port-forward deploy/strixlog 8080:8080
+# then: curl http://localhost:8080/health
+
+# Tear down
+./k8s/teardown.sh
+```
+
 ## Folder Structure
 
 ```bash
 .
 ├── strixlog/       # Main log aggregator and dashboard application (port 8080)
 ├── randomlog/      # Random log generator with REST API (port 8081)
+├── k8s/            # KIND cluster config and Kubernetes manifests
 ├── docker-compose.yml
 └── .devcontainer/  # VS Code dev container configuration
 ```
