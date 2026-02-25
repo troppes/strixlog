@@ -1,0 +1,15 @@
+services:
+  strixlog:
+    build: ./strixlog
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  randomlog:
+    build: ./randomlog
+    ports:
+      - "8081:8081"
