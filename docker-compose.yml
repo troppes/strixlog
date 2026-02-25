@@ -3,8 +3,6 @@ services:
     build: ./strixlog
     ports:
       - "8080:8080"
-    networks:
-      - strixnet
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
       interval: 10s
@@ -15,12 +13,3 @@ services:
     build: ./randomlog
     ports:
       - "8081:8081"
-    networks:
-      - strixnet
-    depends_on:
-      strixlog:
-        condition: service_healthy
-
-networks:
-  strixnet:
-    driver: bridge

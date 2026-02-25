@@ -39,7 +39,7 @@ cd randomlog && go test ./...
 
 ## Folder Structure
 
-```
+```bash
 .
 ├── strixlog/       # Main log aggregator and dashboard application (port 8080)
 ├── randomlog/      # Random log generator with REST API (port 8081)
@@ -51,7 +51,7 @@ cd randomlog && go test ./...
 
 Both apps expose a health check endpoint:
 
-```
+```bash
 GET /health
 200 OK
 {"status":"ok"}
