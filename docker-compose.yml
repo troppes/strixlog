@@ -1,6 +1,7 @@
 services:
   strixlog:
     build: ./strixlog
+    image: strixlog:latest
     ports:
       - "8080:8080"
     healthcheck:
@@ -11,5 +12,6 @@ services:
 
   randomlog:
     build: ./randomlog
+    image: randomlog:latest
     ports:
       - "8081:8081"

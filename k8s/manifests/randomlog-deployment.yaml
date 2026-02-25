@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: randomlog
+  namespace: default
+  labels:
+    app: randomlog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: randomlog
+  template:
+    metadata:
+      labels:
+        app: randomlog
+    spec:
+      containers:
+        - name: randomlog
+          image: randomlog:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8081
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10

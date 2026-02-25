@@ -13,6 +13,7 @@ The goal is to use only libraries when its necessary, if only a small part of a 
 ## Simplicity First
 
 Do not introduce infrastructure, abstractions, or configuration for requirements that do not exist yet. Add complexity only when it is concretely needed. Examples:
+
 - Do not add Docker networks, volumes, or `depends_on` unless a service actually depends on another at runtime
 - Do not add shared libraries between services until duplication becomes a real maintenance problem
 - Do not add error handling, retries, or fallbacks for scenarios that cannot happen yet

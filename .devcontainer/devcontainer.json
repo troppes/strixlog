@@ -1,10 +1,12 @@
 {
   "name": "Strixlog",
-  "image": "mcr.microsoft.com/devcontainers/go:1.26",
+  "image": "mcr.microsoft.com/devcontainers/go:1.25",
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    },
     "ghcr.io/devcontainers/features/go:1": {
-      "version": "1.26",
+      "version": "1.25",
       "installDelve": true
     }
   },
