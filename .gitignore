@@ -34,3 +34,6 @@ randomlog/cmd/server/server
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Settings
+.claude
