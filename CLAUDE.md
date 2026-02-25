@@ -10,6 +10,13 @@ Always modify the backlog before commiting so no filechanges remain after you ar
 
 The goal is to use only libraries when its necessary, if only a small part of a lib is needed, recreate the function.
 
+## Simplicity First
+
+Do not introduce infrastructure, abstractions, or configuration for requirements that do not exist yet. Add complexity only when it is concretely needed. Examples:
+- Do not add Docker networks, volumes, or `depends_on` unless a service actually depends on another at runtime
+- Do not add shared libraries between services until duplication becomes a real maintenance problem
+- Do not add error handling, retries, or fallbacks for scenarios that cannot happen yet
+
 <!-- BACKLOG.MD MCP GUIDELINES START -->
 
 <CRITICAL_INSTRUCTION>

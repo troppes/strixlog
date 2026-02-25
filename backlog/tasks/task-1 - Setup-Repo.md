@@ -4,7 +4,7 @@ title: Setup Repo
 status: Done
 assignee: []
 created_date: '2026-02-25 12:59'
-updated_date: '2026-02-25 13:33'
+updated_date: '2026-02-25 13:51'
 labels: []
 milestone: m-0
 dependencies: []
@@ -94,6 +94,16 @@ Repository-level files:
 | DevContainer as primary workflow | — | **Yes** — include Docker-in-Docker, delve |
 | `/health` vs `/ready` | — | `/health` only |
 | Graceful shutdown | — | Bare `ListenAndServe` sufficient for bootstrap |
+
+## Design Decision: Keep docker-compose.yml simple
+
+Removed named network (`strixnet`) and `depends_on` from `docker-compose.yml`.
+
+- `randomlog` writes to stdout unconditionally — it does not need `strixlog` to be healthy before starting
+- `strixlog` reads container logs via the Docker socket/API, not via inter-container HTTP — no shared network required
+- Docker Compose default bridge network is sufficient
+
+**Principle: do not add infrastructure for future requirements. Add it when it is actually needed.**
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
