@@ -1,7 +1,7 @@
 ---
 id: TASK-2
 title: Docker log streaming
-status: Draft
+status: To Do
 assignee: []
 created_date: '2026-02-25 13:59'
 updated_date: '2026-02-25 14:23'

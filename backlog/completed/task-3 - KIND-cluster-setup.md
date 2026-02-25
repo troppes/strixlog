@@ -4,7 +4,7 @@ title: KIND cluster setup
 status: Done
 assignee: []
 created_date: '2026-02-25 13:59'
-updated_date: '2026-02-25 14:36'
+updated_date: '2026-02-25 20:14'
 labels: []
 dependencies: []
 ---
