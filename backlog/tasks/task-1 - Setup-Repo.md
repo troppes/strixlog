@@ -1,10 +1,10 @@
 ---
 id: TASK-1
 title: Setup Repo
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-02-25 12:59'
-updated_date: '2026-02-25 13:26'
+updated_date: '2026-02-25 13:33'
 labels: []
 milestone: m-0
 dependencies: []
@@ -37,13 +37,13 @@ Repository-level files:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Random Log generator app is created
-- [ ] #2 Strixlog app is created
-- [ ] #3 Docker-Compose file is added
-- [ ] #4 Both apps can be run
-- [ ] #5 Readme is updated
-- [ ] #6 Github Actions is created
-- [ ] #7 DevContainer configuration is added
+- [x] #1 Random Log generator app is created
+- [x] #2 Strixlog app is created
+- [x] #3 Docker-Compose file is added
+- [x] #4 Both apps can be run
+- [x] #5 Readme is updated
+- [x] #6 Github Actions is created
+- [x] #7 DevContainer configuration is added
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -95,3 +95,9 @@ Repository-level files:
 | `/health` vs `/ready` | — | `/health` only |
 | Graceful shutdown | — | Bare `ListenAndServe` sufficient for bootstrap |
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Bootstrapped the monorepo with two Go 1.26 applications.\n\n- `strixlog/` and `randomlog/` each have separate `go.mod`, `cmd/server/main.go`, `internal/server` package with health handler, integration test, and multi-stage Dockerfile.\n- `docker-compose.yml` runs both on the `strixnet` bridge network with healthchecks and dependency ordering.\n- `.devcontainer/devcontainer.json` uses Go 1.26 image with Docker-in-Docker, Delve, and VS Code extensions.\n- `.github/workflows/ci.yml` runs vet, test, and build for each app via a matrix strategy.\n- `README.md` updated with prerequisites, run instructions, folder structure, API reference, and log format.\n- All tests pass locally.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -1,0 +1,21 @@
+{
+  "name": "Strixlog",
+  "image": "mcr.microsoft.com/devcontainers/go:1.26",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.26",
+      "installDelve": true
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+  "postCreateCommand": "cd strixlog && go mod download && cd ../randomlog && go mod download",
+  "forwardPorts": [8080, 8081]
+}
