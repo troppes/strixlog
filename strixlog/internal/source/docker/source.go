@@ -1,45 +1,56 @@
 package docker
 
 import (
+	"bufio"
 	"context"
-	"errors"
 	"io"
 	"log"
-	"net"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/filters"
+	dockerclient "github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
+
 	"github.com/troppes/strixlog/strixlog/internal/model"
 )
 
 // streamer holds the cancel func for one container's log stream goroutine.
-// A pointer is stored in the streams map so goroutines can compare identity.
 type streamer struct {
 	cancel context.CancelFunc
 }
 
 // DockerSource implements source.LogSource for Docker environments.
 type DockerSource struct {
-	client   *Client
+	cli      *dockerclient.Client
 	hostname string
 	logs     chan model.LogEntry
 
 	mu       sync.Mutex
-	streams  map[string]*streamer // containerID -> streamer
+	streams  map[string]*streamer
 	cancelFn context.CancelFunc
 	stopOnce sync.Once
 }
 
 // NewDockerSource creates a DockerSource using the default Docker socket.
-func NewDockerSource() *DockerSource {
+func NewDockerSource() (*DockerSource, error) {
+	cli, err := dockerclient.NewClientWithOpts(
+		dockerclient.FromEnv,
+		dockerclient.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return nil, err
+	}
 	return &DockerSource{
-		client:   NewClient(),
+		cli:      cli,
 		hostname: os.Getenv("HOSTNAME"),
 		logs:     make(chan model.LogEntry, 256),
 		streams:  make(map[string]*streamer),
-	}
+	}, nil
 }
 
 // Start begins streaming logs from all running containers and watches for new ones.
@@ -51,7 +62,7 @@ func (s *DockerSource) Start(ctx context.Context) error {
 	s.cancelFn = cancel
 	s.mu.Unlock()
 
-	containers, err := s.client.ListContainers(ctx)
+	containers, err := s.cli.ContainerList(ctx, container.ListOptions{})
 	if err != nil {
 		cancel()
 		return err
@@ -64,13 +75,14 @@ func (s *DockerSource) Start(ctx context.Context) error {
 		s.startStreamer(ctx, c.ID, containerName(c))
 	}
 
-	events, err := s.client.WatchEvents(ctx)
-	if err != nil {
-		cancel()
-		return err
-	}
+	eventCh, errCh := s.cli.Events(ctx, events.ListOptions{
+		Filters: filters.NewArgs(
+			filters.Arg("event", "start"),
+			filters.Arg("event", "die"),
+		),
+	})
 
-	go s.handleEvents(ctx, events)
+	go s.handleEvents(ctx, eventCh, errCh)
 	return nil
 }
 
@@ -83,6 +95,9 @@ func (s *DockerSource) Stop() error {
 		if fn != nil {
 			fn()
 		}
+		if s.cli != nil {
+			s.cli.Close()
+		}
 	})
 	return nil
 }
@@ -92,12 +107,20 @@ func (s *DockerSource) Logs() <-chan model.LogEntry {
 	return s.logs
 }
 
-func (s *DockerSource) handleEvents(ctx context.Context, events <-chan ContainerEvent) {
+func (s *DockerSource) handleEvents(ctx context.Context, eventCh <-chan events.Message, errCh <-chan error) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case event, ok := <-events:
+		case err, ok := <-errCh:
+			if !ok {
+				return
+			}
+			if ctx.Err() == nil {
+				log.Printf("docker events error: %v", err)
+			}
+			return
+		case event, ok := <-eventCh:
 			if !ok {
 				return
 			}
@@ -131,8 +154,6 @@ func (s *DockerSource) startStreamer(ctx context.Context, id, name string) {
 	go func() {
 		defer func() {
 			s.mu.Lock()
-			// Only remove our own entry — a container restart may have already
-			// registered a new streamer for the same ID.
 			if s.streams[id] == sr {
 				delete(s.streams, id)
 			}
@@ -153,46 +174,48 @@ func (s *DockerSource) stopStreamer(id string) {
 }
 
 func (s *DockerSource) streamContainer(ctx context.Context, id, name string) {
-	body, err := s.client.StreamLogs(ctx, id)
+	if ctx.Err() != nil {
+		return
+	}
+	body, err := s.cli.ContainerLogs(ctx, id, container.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+		Tail:       "0",
+	})
 	if err != nil {
 		if ctx.Err() == nil {
-			log.Printf("stream logs for %s: %v", name, err)
+			log.Printf("container logs for %s: %v", name, err)
 		}
 		return
 	}
 	defer body.Close()
 
-	for {
-		frame, err := ReadFrame(body)
-		if err != nil {
-			if errors.Is(err, io.EOF) || isClosedError(err) || ctx.Err() != nil {
-				return
-			}
-			log.Printf("read frame for %s: %v", name, err)
-			return
-		}
+	pr, pw := io.Pipe()
+	go func() {
+		_, err := stdcopy.StdCopy(pw, pw, body)
+		pw.CloseWithError(err)
+	}()
 
-		line := strings.TrimRight(string(frame.Payload), "\n\r")
+	scanner := bufio.NewScanner(pr)
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r")
 		if line == "" {
 			continue
 		}
-
 		entry := model.LogEntry{
 			Timestamp: time.Now().UTC(),
 			Source:    name,
 			Line:      line,
 		}
-
 		select {
 		case s.logs <- entry:
 		case <-ctx.Done():
+			pr.CloseWithError(ctx.Err())
 			return
 		}
 	}
-}
-
-// isClosedError detects errors that occur when a connection is closed,
-// typically during context cancellation or container stop.
-func isClosedError(err error) bool {
-	return errors.Is(err, net.ErrClosed) || errors.Is(err, io.ErrClosedPipe)
+	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+		log.Printf("log scanner for %s: %v", name, err)
+	}
 }

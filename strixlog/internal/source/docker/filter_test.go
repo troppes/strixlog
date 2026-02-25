@@ -1,6 +1,10 @@
 package docker
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/docker/docker/api/types/container"
+)
 
 func TestIsSelf(t *testing.T) {
 	tests := []struct {
@@ -54,27 +58,27 @@ func TestIsSelf(t *testing.T) {
 func TestContainerName(t *testing.T) {
 	tests := []struct {
 		name      string
-		container Container
+		container container.Summary
 		want      string
 	}{
 		{
 			name:      "name with leading slash",
-			container: Container{ID: "abc123", Names: []string{"/mycontainer"}},
+			container: container.Summary{ID: "abc123", Names: []string{"/mycontainer"}},
 			want:      "mycontainer",
 		},
 		{
 			name:      "name without leading slash",
-			container: Container{ID: "abc123", Names: []string{"mycontainer"}},
+			container: container.Summary{ID: "abc123", Names: []string{"mycontainer"}},
 			want:      "mycontainer",
 		},
 		{
 			name:      "no names falls back to short id",
-			container: Container{ID: "abc123def456789"},
+			container: container.Summary{ID: "abc123def456789"},
 			want:      "abc123def456",
 		},
 		{
 			name:      "multiple names uses first",
-			container: Container{ID: "abc123", Names: []string{"/primary", "/alias"}},
+			container: container.Summary{ID: "abc123", Names: []string{"/primary", "/alias"}},
 			want:      "primary",
 		},
 	}

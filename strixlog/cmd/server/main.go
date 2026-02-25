@@ -21,7 +21,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	src := docker.NewDockerSource()
+	src, err := docker.NewDockerSource()
+	if err != nil {
+		log.Fatalf("docker source init: %v", err)
+	}
 	if err := src.Start(ctx); err != nil {
 		log.Fatalf("docker source start: %v", err)
 	}

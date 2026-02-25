@@ -1,6 +1,10 @@
 package docker
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/docker/docker/api/types/container"
+)
 
 // isSelf returns true when the container ID starts with the given hostname.
 // Inside a Docker container, HOSTNAME is set to a prefix of the container ID.
@@ -13,7 +17,7 @@ func isSelf(containerID, hostname string) bool {
 
 // containerName extracts the primary display name for a container.
 // Docker stores names with a leading slash, so we strip it.
-func containerName(c Container) string {
+func containerName(c container.Summary) string {
 	if len(c.Names) == 0 {
 		return c.ID[:12]
 	}

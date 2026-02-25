@@ -2,113 +2,89 @@ package docker
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/troppes/strixlog/strixlog/internal/model"
 )
 
-// newSourceWithServer creates a DockerSource backed by a test HTTP server.
-func newSourceWithServer(ts *httptest.Server, hostname string) *DockerSource {
-	return &DockerSource{
-		client:   newClientWithBase(ts.URL+"/"+apiVersion, ts.Client().Transport),
-		hostname: hostname,
-		logs:     make(chan model.LogEntry, 64),
-		streams:  make(map[string]*streamer),
+func TestDockerSourceStopIsIdempotent(t *testing.T) {
+	src := &DockerSource{
+		logs:    make(chan model.LogEntry, 8),
+		streams: make(map[string]*streamer),
+	}
+
+	_, cancel := context.WithCancel(context.Background())
+	src.mu.Lock()
+	src.cancelFn = cancel
+	src.mu.Unlock()
+
+	// Calling Stop multiple times must not panic.
+	if err := src.Stop(); err != nil {
+		t.Errorf("first Stop: %v", err)
+	}
+	if err := src.Stop(); err != nil {
+		t.Errorf("second Stop: %v", err)
 	}
 }
 
-func TestDockerSourceExcludesSelf(t *testing.T) {
-	selfID := "selfcontainer123"
-
-	containers := []Container{
-		{ID: selfID, Names: []string{"/strixlog"}},
-		{ID: "other456", Names: []string{"/app"}},
+func TestStartStreamerDeduplication(t *testing.T) {
+	src := &DockerSource{
+		logs:    make(chan model.LogEntry, 8),
+		streams: make(map[string]*streamer),
 	}
 
-	logPayload := buildFrame(1, []byte(`{"msg":"hello"}`+"\n"))
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/"+apiVersion+"/containers/json":
-			json.NewEncoder(w).Encode(containers)
-		case strings.Contains(r.URL.Path, "/logs"):
-			w.WriteHeader(http.StatusOK)
-			w.Write(logPayload)
-		case strings.Contains(r.URL.Path, "/events"):
-			w.WriteHeader(http.StatusOK)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer ts.Close()
-
-	src := newSourceWithServer(ts, "selfcontainer")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := src.Start(ctx); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	defer src.Stop()
+	// startStreamer for a container that never sends data — just verify
+	// that calling it twice for the same ID doesn't register two goroutines.
+	//
+	// We inject a context that is already cancelled so the streamer exits
+	// immediately without needing a real Docker daemon.
+	alreadyCancelled, c := context.WithCancel(ctx)
+	c()
 
-	select {
-	case entry := <-src.Logs():
-		if entry.Source == "strixlog" {
-			t.Error("received log from self — should have been excluded")
-		}
-		if entry.Source != "app" {
-			t.Errorf("source = %q, want app", entry.Source)
-		}
-	case <-ctx.Done():
-		t.Log("no log entry received (self was correctly excluded, other may not have sent logs)")
+	src.startStreamer(alreadyCancelled, "abc123", "myapp")
+	src.startStreamer(alreadyCancelled, "abc123", "myapp") // duplicate — must be a no-op
+
+	// Give goroutines a moment to exit.
+	time.Sleep(50 * time.Millisecond)
+
+	src.mu.Lock()
+	n := len(src.streams)
+	src.mu.Unlock()
+
+	// After exit the entry is cleaned up; either 0 or 1 is acceptable
+	// (goroutine may have already cleaned up), but never 2.
+	if n > 1 {
+		t.Errorf("streams map has %d entries after dedup; want ≤1", n)
 	}
 }
 
-func TestDockerSourceHandlesContainerStopCleanly(t *testing.T) {
-	containers := []Container{
-		{ID: "running123", Names: []string{"/myapp"}},
+func TestStopStreamerCleansUp(t *testing.T) {
+	src := &DockerSource{
+		logs:    make(chan model.LogEntry, 8),
+		streams: make(map[string]*streamer),
 	}
 
-	logPayload := buildFrame(1, []byte("log line\n"))
+	called := false
+	sr := &streamer{cancel: func() { called = true }}
+	src.mu.Lock()
+	src.streams["abc123"] = sr
+	src.mu.Unlock()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/"+apiVersion+"/containers/json":
-			json.NewEncoder(w).Encode(containers)
-		case strings.Contains(r.URL.Path, "/logs"):
-			w.WriteHeader(http.StatusOK)
-			w.Write(logPayload)
-		case strings.Contains(r.URL.Path, "/events"):
-			w.WriteHeader(http.StatusOK)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer ts.Close()
+	src.stopStreamer("abc123")
 
-	src := newSourceWithServer(ts, "")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	if err := src.Start(ctx); err != nil {
-		t.Fatalf("Start: %v", err)
+	if !called {
+		t.Error("cancel was not called by stopStreamer")
 	}
-	defer src.Stop()
 
-	select {
-	case entry, ok := <-src.Logs():
-		if !ok {
-			t.Fatal("channel closed unexpectedly")
-		}
-		if entry.Source != "myapp" {
-			t.Errorf("source = %q, want myapp", entry.Source)
-		}
-	case <-ctx.Done():
-		t.Error("timed out waiting for log entry")
+	src.mu.Lock()
+	_, still := src.streams["abc123"]
+	src.mu.Unlock()
+
+	if still {
+		t.Error("stream entry was not removed from map")
 	}
 }

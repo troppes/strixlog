@@ -4,7 +4,7 @@ title: Docker log streaming
 status: Done
 assignee: []
 created_date: '2026-02-25 13:59'
-updated_date: '2026-02-25 20:24'
+updated_date: '2026-02-25 20:33'
 labels: []
 dependencies: []
 ---
@@ -125,10 +125,14 @@ docker-compose.yml                         -- add socket mount + HOSTNAME to str
 1. Output format: print raw line or re-serialise as enriched JSON? Current plan: raw line for simplicity.
 2. Capture stdout only or also stderr? Current plan: both (Docker API returns both by default), identical prefix.
 3. Docker API minimum version: pinned to `v1.45`.
+
+The Docker SDK (github.com/docker/docker/client) is permitted for this task. Use it to replace the raw HTTP client, frame parser, and stdcopy demuxing instead of hand-rolling those.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Implemented Docker log streaming for strixlog. Added LogSource interface, LogEntry model, DockerSource (raw HTTP over unix socket — no Docker SDK), PrintLogs printer, and updated main.go with signal handling. Docker Compose updated with socket mount and HOSTNAME env var. All acceptance criteria met: unit tests cover mux parsing, filter logic, client API, and source lifecycle; integration test tagged with //go:build integration. Race detector passes. Key issues from code review resolved: cancelFn protected by mutex + sync.Once for Stop idempotency, pointer-identity check in goroutine defer to handle container restart races, isClosedError uses errors.Is(net.ErrClosed), URL-encoded events filter query param, scanner.Err() logged after event loop.
+
+Refactored to use Docker SDK (github.com/docker/docker v28.5.2): replaced hand-rolled HTTP client and 8-byte frame parser with dockerclient.Client + stdcopy.StdCopy. Removed client.go, mux.go and their tests (~360 lines). filter.go updated to use container.Summary. source.go uses SDK ContainerList/ContainerLogs/Events. Net reduction: ~360 lines removed, 0 lines added for the replaced logic.
 <!-- SECTION:FINAL_SUMMARY:END -->
